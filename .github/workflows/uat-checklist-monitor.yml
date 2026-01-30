@@ -1,0 +1,81 @@
+name: UAT Checklist Monitor
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  uat-monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check UAT API
+        id: uat
+        run: |
+          echo "Checking UAT API at $(date)"
+
+          STATUS=$(curl \
+            --silent \
+            --connect-timeout 5 \
+            --max-time 10 \
+            -w "%{http_code}" \
+            -o /dev/null \
+            -H "accept: application/json" \
+            -H "X-Tenant: 68b20dd0fb42964f2328b424" \
+            http://157.20.214.84:9292/api/v1/checklists/templates || echo "000")
+
+          echo "UAT HTTP Status: $STATUS"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "uat=down" >> $GITHUB_OUTPUT
+          else
+            echo "uat=up" >> $GITHUB_OUTPUT
+          fi
+
+      # ❌ UAT DOWN → create issue
+      - name: UAT checklist FAILED
+        if: steps.uat.outputs.uat == 'down'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = "uat-down";
+
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: label
+            });
+
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "🚨 UAT checklist is FAILED",
+                body: `UAT checklist API is DOWN.\nTime: ${new Date().toUTCString()}`,
+                labels: [label]
+              });
+            }
+
+      # ✅ UAT RECOVERED → close issue
+      - name: UAT checklist OK
+        if: steps.uat.outputs.uat == 'up'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "uat-down"
+            });
+
+            for (const issue of issues.data) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed"
+              });
+            }
