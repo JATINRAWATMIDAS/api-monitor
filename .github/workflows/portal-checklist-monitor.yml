@@ -1,5 +1,9 @@
 name: Portal Checklist Monitor
 
+permissions:
+  contents: read
+  issues: write
+
 on:
   schedule:
     - cron: "*/5 * * * *"
@@ -29,13 +33,13 @@ jobs:
 
           if [ "$STATUS" != "200" ]; then
             echo "portal=down" >> $GITHUB_OUTPUT
+            exit 1
           else
             echo "portal=up" >> $GITHUB_OUTPUT
           fi
 
-      # ❌ Portal DOWN → create issue
       - name: Portal checklist FAILED
-        if: steps.portal.outputs.portal == 'down'
+        if: failure()
         uses: actions/github-script@v7
         with:
           script: |
@@ -55,27 +59,5 @@ jobs:
                 title: "🚨 Portal checklist is FAILED",
                 body: `Portal checklist API is DOWN.\nTime: ${new Date().toUTCString()}`,
                 labels: [label]
-              });
-            }
-
-      # ✅ Portal RECOVERED → close issue
-      - name: Portal checklist OK
-        if: steps.portal.outputs.portal == 'up'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: "open",
-              labels: "portal-down"
-            });
-
-            for (const issue of issues.data) {
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                state: "closed"
               });
             }
