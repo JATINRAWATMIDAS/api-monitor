@@ -29,6 +29,7 @@ jobs:
 
           if [ "$STATUS" != "200" ]; then
             echo "uat=down" >> $GITHUB_OUTPUT
+            exit1
           else
             echo "uat=up" >> $GITHUB_OUTPUT
           fi
