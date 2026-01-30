@@ -27,7 +27,7 @@ jobs:
             -o /dev/null \
             -H "accept: application/json" \
             -H "X-Tenant: 670a48b168b0640a262870c4" \
-            https://tenantapi.theartemis.ai/api/v1/checklists/templates123 || echo "000")
+            https://tenantapi.theartemis.ai/api/v1/checklists/templates || echo "000")
 
           echo "Portal HTTP Status: $STATUS"
 
