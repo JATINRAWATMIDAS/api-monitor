@@ -1,63 +1,53 @@
 name: Portal Checklist Monitor
 
-permissions:
-  contents: read
-  issues: write
-
 on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
-  portal-monitor:
+  check-api:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Portal API
-        id: portal
+      - name: Fast API Health Check
         run: |
-          echo "Checking PORTAL API at $(date)"
+          START_TIME=$(date +%s)
+
+          echo "========================================"
+          echo "API Health Check Started"
+          echo "Time: $(date)"
+          echo "========================================"
 
           STATUS=$(curl \
             --silent \
+            --show-error \
+            --fail \
             --connect-timeout 5 \
             --max-time 10 \
+            --retry 1 \
+            --retry-delay 1 \
+            --retry-max-time 10 \
+            -o response.json \
             -w "%{http_code}" \
-            -o /dev/null \
             -H "accept: application/json" \
             -H "X-Tenant: 670a48b168b0640a262870c4" \
             https://tenantapi.theartemis.ai/api/v1/checklists/templates || echo "000")
 
-          echo "Portal HTTP Status: $STATUS"
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+
+          echo "----------------------------------------"
+          echo "HTTP Status: $STATUS"
+          echo "Duration: ${DURATION}s"
+          echo "----------------------------------------"
 
           if [ "$STATUS" != "200" ]; then
-            echo "portal=down" >> $GITHUB_OUTPUT
+            echo "❌ API FAILED"
+            echo "Failure Time: $(date)"
+            cat response.json || true
             exit 1
-          else
-            echo "portal=up" >> $GITHUB_OUTPUT
           fi
 
-      - name: Portal checklist FAILED
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const label = "portal-down";
-
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: "open",
-              labels: label
-            });
-
-            if (issues.data.length === 0) {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: "🚨 Portal checklist is FAILED",
-                body: `Portal checklist API is DOWN.\nTime: ${new Date().toUTCString()}`,
-                labels: [label]
-              });
-            }
+          echo "✅ API OK"
+          echo "Success Time: $(date)"
