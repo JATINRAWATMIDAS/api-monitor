@@ -1,0 +1,81 @@
+name: Portal Checklist Monitor
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  portal-monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Portal API
+        id: portal
+        run: |
+          echo "Checking PORTAL API at $(date)"
+
+          STATUS=$(curl \
+            --silent \
+            --connect-timeout 5 \
+            --max-time 10 \
+            -w "%{http_code}" \
+            -o /dev/null \
+            -H "accept: application/json" \
+            -H "X-Tenant: 670a48b168b0640a262870c4" \
+            https://tenantapi.theartemis.ai/api/v1/checklists/templates123 || echo "000")
+
+          echo "Portal HTTP Status: $STATUS"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "portal=down" >> $GITHUB_OUTPUT
+          else
+            echo "portal=up" >> $GITHUB_OUTPUT
+          fi
+
+      # ❌ Portal DOWN → create issue
+      - name: Portal checklist FAILED
+        if: steps.portal.outputs.portal == 'down'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = "portal-down";
+
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: label
+            });
+
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "🚨 Portal checklist is FAILED",
+                body: `Portal checklist API is DOWN.\nTime: ${new Date().toUTCString()}`,
+                labels: [label]
+              });
+            }
+
+      # ✅ Portal RECOVERED → close issue
+      - name: Portal checklist OK
+        if: steps.portal.outputs.portal == 'up'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "portal-down"
+            });
+
+            for (const issue of issues.data) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed"
+              });
+            }
