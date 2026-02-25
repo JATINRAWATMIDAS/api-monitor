@@ -31,7 +31,7 @@ jobs:
             -o response.json \
             -w "%{http_code}" \
             -H "accept: application/json" \
-            -H "X-Tenant: 670a48b168b0640a262870c4" \
+            -H "X-Tenant: 68cc764fbfc57730593b4a32" \
             https://tenantapi.theartemis.ai/api/v1/checklists/templates || echo "000")
 
           END_TIME=$(date +%s)
